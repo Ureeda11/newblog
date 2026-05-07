@@ -4,10 +4,9 @@ import { authOptions } from '@/lib/auth'
 import connectDB from '@/lib/mongodb'
 import Post from '@/models/Post'
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
-) {
+type Params = { params: Promise<{ slug: string }> }
+
+export async function GET(req: NextRequest, { params }: Params) {
   try {
     const { slug } = await params
     await connectDB()
@@ -21,10 +20,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
-) {
+export async function PUT(req: NextRequest, { params }: Params) {
   try {
     const { slug } = await params
     const session = await getServerSession(authOptions)
@@ -45,10 +41,7 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
-) {
+export async function DELETE(req: NextRequest, { params }: Params) {
   try {
     const { slug } = await params
     const session = await getServerSession(authOptions)
