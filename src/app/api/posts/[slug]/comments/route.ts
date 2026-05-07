@@ -7,10 +7,10 @@ import Post from '@/models/Post'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
+  context: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const { slug } = await params
+    const { slug } = await context.params
     await connectDB()
     const post = await Post.findOne({ slug })
     if (!post) {

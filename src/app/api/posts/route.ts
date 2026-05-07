@@ -4,55 +4,65 @@ import { authOptions } from '@/lib/auth'
 import connectDB from '@/lib/mongodb'
 import Post from '@/models/Post'
 
-type Params = { params: Promise<{ slug: string }> }
-
-export async function GET(req: NextRequest, { params }: Params) {
+export async function GET(req: NextRequest) {
   try {
-    const { slug } = await params
     await connectDB()
-    const post = await Post.findOne({ slug })
-      .populate('author', 'name avatar bio')
+    const { searchParams } = new URL(req.url)
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '9')
+    const tag = searchParams.get('tag')
+    const search = searchParams.get('search')
+
+    const query: any = { status: 'published' }
+    if (tag) query.tags = { $in: [tag] }
+    if (search) query.title = { $regex: search, $options: 'i' }
+
+    const total = await Post.countDocuments(query)
+    const posts = await Post.find(query)
+      .populate('author', 'name avatar')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
       .lean()
-    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 })
-    return NextResponse.json({ post })
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+
+    return NextResponse.json({ posts, total, page, totalPages: Math.ceil(total / limit) })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
 
-export async function PUT(req: NextRequest, { params }: Params) {
+export async function POST(req: NextRequest) {
   try {
-    const { slug } = await params
     const session = await getServerSession(authOptions)
     if (!session || session.user.role !== 'author') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
     await connectDB()
     const body = await req.json()
-    const post = await Post.findOneAndUpdate(
-      { slug, author: session.user.id },
-      { ...body },
-      { new: true }
-    )
-    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 })
-    return NextResponse.json({ post })
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}
+    const { title, content, excerpt, coverImage, tags, status } = body
 
-export async function DELETE(req: NextRequest, { params }: Params) {
-  try {
-    const { slug } = await params
-    const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== 'author') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!title || !content || !excerpt) {
+      return NextResponse.json({ error: 'Title, content and excerpt are required' }, { status: 400 })
     }
-    await connectDB()
-    const post = await Post.findOneAndDelete({ slug, author: session.user.id })
-    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 })
-    return NextResponse.json({ message: 'Post deleted successfully' })
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+
+    const slug =
+      title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') +
+      '-' + Date.now()
+
+    const post = await Post.create({
+      title,
+      slug,
+      content,
+      excerpt,
+      coverImage: coverImage || '',
+      author: session.user.id,
+      tags: tags || [],
+      status: status || 'draft',
+    })
+
+    return NextResponse.json({ post: JSON.parse(JSON.stringify(post)) }, { status: 201 })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
