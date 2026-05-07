@@ -4,22 +4,17 @@ import { authOptions } from '@/lib/auth'
 import connectDB from '@/lib/mongodb'
 import Post from '@/models/Post'
 
-export async function POST(
-  req: NextRequest,
-  context: { params: Promise<{ slug: string }> }
-) {
+type Params = { params: Promise<{ slug: string }> }
+
+export async function POST(req: NextRequest, context: Params) {
   try {
     const { slug } = await context.params
     const session = await getServerSession(authOptions)
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     await connectDB()
     const post = await Post.findOne({ slug })
-    if (!post) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 })
-    }
+    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 })
 
     const userId = session.user.id
     const alreadyLiked = post.likes.some((id: any) => id.toString() === userId)

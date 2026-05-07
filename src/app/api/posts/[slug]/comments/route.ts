@@ -5,19 +5,16 @@ import connectDB from '@/lib/mongodb'
 import Comment from '@/models/Comment'
 import Post from '@/models/Post'
 
-export async function GET(
-  req: NextRequest,
-  context: { params: Promise<{ slug: string }> }
-) {
+type Params = { params: Promise<{ slug: string }> }
+
+export async function GET(req: NextRequest, context: Params) {
   try {
     const { slug } = await context.params
     await connectDB()
-    const post = await Post.findOne({ slug })
-    if (!post) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 })
-    }
+    const post = await Post.findOne({ slug }).lean()
+    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 })
 
-    const comments = await Comment.find({ post: post._id })
+    const comments = await Comment.find({ post: (post as any)._id })
       .populate('author', 'name avatar')
       .sort({ createdAt: -1 })
       .lean()
@@ -28,32 +25,23 @@ export async function GET(
   }
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
-) {
+export async function POST(req: NextRequest, context: Params) {
   try {
-    const { slug } = await params
+    const { slug } = await context.params
     const session = await getServerSession(authOptions)
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     await connectDB()
     const { content } = await req.json()
-    if (!content) {
-      return NextResponse.json({ error: 'Content is required' }, { status: 400 })
-    }
+    if (!content) return NextResponse.json({ error: 'Content is required' }, { status: 400 })
 
-    const post = await Post.findOne({ slug })
-    if (!post) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 })
-    }
+    const post = await Post.findOne({ slug }).lean()
+    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 })
 
     const comment = await Comment.create({
       content,
       author: session.user.id,
-      post: post._id,
+      post: (post as any)._id,
     })
 
     const populated = await comment.populate('author', 'name avatar')
